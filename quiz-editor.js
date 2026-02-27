@@ -16,6 +16,11 @@ const typeLabels = {
 };
 
 let questions = [];
+
+// Pagination (Danh sách câu hỏi)
+const LIST_PER_PAGE = 20;
+let listPage = 1;
+
 let currentEditId = null;
 let draftId = null; // ID nháp cho câu hỏi mới (hiển thị ngay khi chọn loại)
 // media trong lúc edit (base64 đã nén)
@@ -125,6 +130,13 @@ function escapeHtml(s) {
 
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 function round2(n) { return Math.round(n * 100) / 100; }
+
+
+function activateTab(tabId){
+  // dùng cơ chế tab sẵn có (click button) để giữ nguyên logic
+  const btn = document.querySelector(`.tab-btn[data-tab="${tabId}"]`);
+  if (btn) btn.click();
+}
 
 function showToast(title, msgHtml) {
   const toast = $("toast");
@@ -257,6 +269,7 @@ function bindListTools(){
   if (s) {
     s.addEventListener("input", () => {
       listSearchTerm = (s.value || "").trim().toLowerCase();
+      listPage = 1;
       renderList();
     });
   }
@@ -363,46 +376,79 @@ function bindEditorBase() {
 ======================= */
 function renderList() {
   const list = $("qList");
+  const pager = $("qPagination");
   $("qCount").textContent = `(${questions.length})`;
 
-  const visible = getVisibleQuestions();
+  const allVisible = getVisibleQuestions(); // full filtered list (not paged)
+
+  // Select-all reflects ALL currently visible (filtered) items, not just current page.
   const selAll = $("qSelectAll");
   if (selAll) {
-    if (!visible.length) selAll.checked = false;
-    else selAll.checked = visible.every(q => q.exportFlag !== false);
+    if (!allVisible.length) selAll.checked = false;
+    else selAll.checked = allVisible.every(q => q.exportFlag !== false);
   }
 
   if (!questions.length) {
     list.innerHTML = `<p class="hint" style="text-align:center;padding:1.2rem 0">Chưa có câu hỏi nào.</p>`;
+    if (pager) pager.innerHTML = "";
     return;
   }
 
-  if (!visible.length) {
+  if (!allVisible.length) {
     list.innerHTML = `<p class="hint" style="text-align:center;padding:1.2rem 0">Không tìm thấy câu hỏi phù hợp.</p>`;
+    if (pager) pager.innerHTML = "";
     return;
   }
 
-  list.innerHTML = visible.map((q) => {
-    const active = q.id === currentEditId ? "active" : "";
-    const exportChecked = q.exportFlag !== false ? "checked" : "";
-    return `
-      <div class="q-item ${active}" data-id="${q.id}">
-        <div class="q-check">
-          <input type="checkbox" ${exportChecked} data-export="${q.id}" title="Chọn để xuất" />
-          <div class="q-meta">
-            <div class="q-type">${typeLabels[q.type] || q.type}</div>
-            <div class="q-text">${escapeHtml(q.question || "(Không có nội dung)")}</div>
-          </div>
+  const totalPages = Math.max(1, Math.ceil(allVisible.length / LIST_PER_PAGE));
+  listPage = Math.min(Math.max(1, listPage), totalPages);
+
+  const start = (listPage - 1) * LIST_PER_PAGE;
+  const visible = allVisible.slice(start, start + LIST_PER_PAGE);
+
+   list.innerHTML=`
+    <table class="q-table">
+      <thead>
+        <tr>
+          <th style="width:50px"></th>
+          <th style="width:140px">Loại</th>
+          <th>Nội dung</th>
+          <th style="width:80px">Xóa</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${visible.map(q=>`
+          <tr data-id="${q.id}" class="${q.id===currentEditId?'active':''}">
+            <td><input type="checkbox"/></td>
+            <td class="q-type-cell">${typeLabels[q.type]}</td>
+            <td class="q-text-cell">${q.question}</td>
+            <td><button class="btn-delete" data-del="${q.id}">🗑️</button></td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+
+  // Pagination UI
+  if (pager) {
+    if (totalPages <= 1) {
+      pager.innerHTML = `<div class="page-info">Hiển thị ${allVisible.length} câu</div>`;
+    } else {
+      pager.innerHTML = `
+        <div class="page-info">Trang <b>${listPage}</b> / <b>${totalPages}</b> • Tổng <b>${allVisible.length}</b> câu</div>
+        <div class="pager">
+          <button class="page-btn" id="btnPrevPage" ${listPage === 1 ? "disabled" : ""}>← Trước</button>
+          <button class="page-btn" id="btnNextPage" ${listPage === totalPages ? "disabled" : ""}>Sau →</button>
         </div>
-        <div class="q-actions">
-          <button class="icon-btn danger" title="Xóa" data-del="${q.id}">🗑️</button>
-        </div>
-      </div>
-    `;
-  }).join("");
+      `;
+
+      $("btnPrevPage")?.addEventListener("click", () => { if (listPage > 1) { listPage--; renderList(); } });
+      $("btnNextPage")?.addEventListener("click", () => { if (listPage < totalPages) { listPage++; renderList(); } });
+    }
+  }
 
   // click chọn item
-  [...list.querySelectorAll(".q-item")].forEach(el => {
+  [...list.querySelectorAll("tbody tr")].forEach(el => {
     el.addEventListener("click", (ev) => {
       // chặn khi click vào checkbox / nút xoá
       const t = ev.target;
@@ -439,6 +485,7 @@ function toggleExportFlag(id, checked) {
    Editor flow
 ======================= */
 function createNewQuestion() {
+  activateTab("tabEditor");
   currentEditId = null;
   draftId = uid(); // tạo ID ngay lập tức cho câu hỏi mới
   draftMedia = {};
@@ -465,6 +512,7 @@ function editQuestion(id) {
   const q = questions.find(x => x.id === id);
   if (!q) return;
 
+  activateTab("tabEditor");
   currentEditId = id;
 
   $("editorTitle").textContent = "✏️ Chỉnh sửa câu hỏi";
