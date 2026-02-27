@@ -33,7 +33,7 @@ body::before{
   z-index:0;
 }
 
-.container{max-width:1400px;margin:0 auto;padding:1.25rem;position:relative;z-index:1}
+.container{max-width:1400px;margin:0 auto;padding:1.25rem;position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column}
 
 header{text-align:center;padding:2rem 0 1.25rem}
 h1{
@@ -67,6 +67,7 @@ button{
   border-radius:12px;
   padding:.9rem 1.2rem;
   font-weight:700;
+  text-align:left;
   letter-spacing:.5px;
   text-transform:uppercase;
   transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
@@ -107,7 +108,7 @@ button:active{transform:translateY(1px)}
 
 /* Layout */
 .top-actions{display:flex;gap:.8rem;flex-wrap:wrap;justify-content:center;margin:1rem 0 1.5rem}
-.main{display:grid;grid-template-columns:360px 1fr;gap:1.25rem;align-items:start}
+.main{display:grid;grid-template-columns:360px 1fr;gap:1.25rem;align-items:stretch;flex:1;min-height:0}
 @media (max-width: 1024px){ .main{grid-template-columns:1fr} }
 
 /* Sidebar list */
@@ -119,17 +120,6 @@ button:active{transform:translateY(1px)}
 .q-selectall{display:flex;align-items:center;gap:.55rem;font-size:.9rem;opacity:.9;user-select:none}
 .q-selectall input{width:18px;height:18px;accent-color: var(--primary)}
 .q-list{display:flex;flex-direction:column;gap:.7rem;max-height:65vh;overflow:auto;padding-right:.4rem}
-.q-item{
-  padding:.85rem;
-  border-radius:14px;
-  border:2px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.04);
-  display:flex;gap:.6rem;align-items:center;
-  cursor:pointer;
-  transition: background .15s ease, transform .15s ease, border-color .15s ease;
-}
-.q-item:hover{transform: translateX(4px); background: rgba(255,255,255,.08)}
-.q-item.active{border-color: var(--primary); background: rgba(255,107,53,.16)}
 .q-meta{min-width:0;flex:1}
 .q-type{font-size:.72rem;color:var(--accent);font-weight:700;text-transform:uppercase;opacity:.95}
 .q-text{font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -335,18 +325,20 @@ select option{background: var(--dark)}
 /* ===== Sidebar Tabs ===== */
 .sidebar-tabs{
   display:flex;
+  flex-direction:column;
   gap:.6rem;
   margin-bottom:1rem;
 }
 
 .tab-btn{
-  flex:1;
+  flex:0 0 auto;
   padding:.7rem;
   border-radius:14px;
   border:1px solid rgba(255,255,255,.12);
   background:rgba(255,255,255,.06);
   color:var(--light);
   font-weight:700;
+  text-align:left;
   cursor:pointer;
   transition:.15s;
 }
@@ -367,4 +359,63 @@ select option{background: var(--dark)}
 
 .tab-content.active{
   display:block;
+}
+
+
+/* Make right panel fill viewport height */
+.main > section.card{display:flex;flex-direction:column;min-height:0}
+.tab-content{display:none}
+.tab-content.active{display:flex;flex-direction:column;flex:1;min-height:0}
+
+.q-list{flex:1;min-height:0;overflow:auto}
+.q-pagination{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-top:.75rem;flex-wrap:wrap}
+.q-pagination .pager{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.q-pagination .page-btn{padding:.55rem .85rem;border-radius:10px;font-weight:800;background:rgba(255,255,255,.10);color:var(--light);border:1px solid rgba(255,255,255,.14)}
+.q-pagination .page-btn:hover{background:rgba(255,255,255,.14)}
+.q-pagination .page-btn[disabled]{opacity:.45;cursor:not-allowed}
+.q-pagination .page-info{opacity:.8;font-weight:600}
+/* ===== Question Table ===== */
+
+.q-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .9rem;
+}
+
+.q-table thead {
+  background: rgba(255,255,255,.08);
+}
+
+.q-table th,
+.q-table td {
+  padding: .7rem .8rem;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  text-align: left;
+}
+
+.q-table tbody tr {
+  cursor: pointer;
+  transition: background .15s ease;
+}
+
+.q-table tbody tr:hover {
+  background: rgba(255,255,255,.06);
+}
+
+.q-table tbody tr.active {
+  background: rgba(255,107,53,.18);
+}
+
+.q-type-cell {
+  font-weight: 700;
+  color: var(--accent);
+  text-transform: uppercase;
+  font-size: .75rem;
+}
+
+.q-text-cell {
+  max-width: 600px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
