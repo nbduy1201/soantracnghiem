@@ -1861,61 +1861,80 @@
      * 5) ORDERING (stable)
      *********************/
     function renderOrdering(q, host){
-      const items = q.items || [];
-      const n = items.length;
+  const items = q.items || [];
+  const n = items.length;
 
-      // stable init order once
-      const init = stableOrder(cacheOrdering, q.id, n, !!QUIZ_CONFIG?.shuffleAnswers);
+  // stable init order once
+  const init = stableOrder(cacheOrdering, q.id, n, !!QUIZ_CONFIG?.shuffleAnswers);
 
-      let ans = userAnswers[q.id];
-      if (!Array.isArray(ans) || ans.length !== n) {
-        ans = [...init];
-        userAnswers[q.id] = ans;
-      }
+  let ans = userAnswers[q.id];
+  if (!Array.isArray(ans) || ans.length !== n) {
+    ans = [...init];
+    userAnswers[q.id] = ans;
+  }
 
-      host.innerHTML = `
-        <div class="hint">Sắp xếp bằng nút lên/xuống.</div>
-        <div class="options" id="orBox"></div>
-      `;
+  host.innerHTML = `
+    <div class="hint">💡 Kéo thả các dòng để sắp xếp thứ tự (không cần bấm mũi tên).</div>
+    <div class="col" id="orBox" style="padding:12px"></div>
+  `;
 
-      const box = $("orBox");
-      box.innerHTML = ans.map((itemIdx, pos) => {
-        const it = items[itemIdx];
-        const text = (it.text ?? it) || "";
-        return `
-          <div class="opt" style="cursor:default" data-pos="${pos}">
-            <div style="width:36px;font-weight:900;opacity:.85">${pos+1}.</div>
-            <div class="txt">${escapeHtml(text)}</div>
-            <button class="btn btn-secondary" style="padding:.55rem .75rem" data-up="${pos}">⬆️</button>
-            <button class="btn btn-secondary" style="padding:.55rem .75rem" data-down="${pos}">⬇️</button>
-          </div>
-        `;
-      }).join("");
+  const box = $("orBox");
+  box.innerHTML = ans.map((itemIdx, pos) => {
+    const it = items[itemIdx];
+    const text = (it?.text ?? it) || "";
+    return `
+      <div class="m-item" draggable="true" data-pos="${pos}">
+        <span class="m-drag" title="Giữ và kéo">↕</span>
+        <div style="width:36px;font-weight:900;opacity:.85">${pos+1}.</div>
+        <div class="txt" style="flex:1;min-width:0">${escapeHtml(text)}</div>
+      </div>
+    `;
+  }).join("");
 
-      box.querySelectorAll("[data-up]").forEach(btn => {
-        btn.addEventListener("click", () => {
-          if (locked) return;
-          const p = Number(btn.getAttribute("data-up"));
-          if (p <= 0) return;
-          const arr = [...ans];
-          [arr[p-1], arr[p]] = [arr[p], arr[p-1]];
-          userAnswers[q.id] = arr;
-          renderOrdering(q, host);
-        });
-      });
-      box.querySelectorAll("[data-down]").forEach(btn => {
-        btn.addEventListener("click", () => {
-          if (locked) return;
-          const p = Number(btn.getAttribute("data-down"));
-          if (p >= ans.length-1) return;
-          const arr = [...ans];
-          [arr[p+1], arr[p]] = [arr[p], arr[p+1]];
-          userAnswers[q.id] = arr;
-          renderOrdering(q, host);
-        });
-      });
-    }
+  // DnD reorder (HTML5)
+  let dragPos = null;
 
+  box.querySelectorAll(".m-item").forEach(item => {
+    item.addEventListener("dragstart", (e) => {
+      if (locked) { e.preventDefault(); return; }
+      dragPos = Number(item.getAttribute("data-pos"));
+      item.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      // setData để một số trình duyệt “chịu” kéo thả
+      e.dataTransfer.setData("text/plain", String(dragPos));
+    });
+
+    item.addEventListener("dragend", () => {
+      item.classList.remove("dragging");
+      box.querySelectorAll(".m-item").forEach(x => x.classList.remove("m-drop-hint"));
+    });
+
+    item.addEventListener("dragover", (e) => {
+      if (locked) return;
+      e.preventDefault();
+      item.classList.add("m-drop-hint");
+    });
+
+    item.addEventListener("dragleave", () => item.classList.remove("m-drop-hint"));
+
+    item.addEventListener("drop", (e) => {
+      if (locked) return;
+      e.preventDefault();
+      item.classList.remove("m-drop-hint");
+
+      const dropPos = Number(item.getAttribute("data-pos"));
+      if (dragPos === null || dropPos === dragPos) return;
+
+      const newArr = [...ans];
+      const [moved] = newArr.splice(dragPos, 1);
+      newArr.splice(dropPos, 0, moved);
+
+      userAnswers[q.id] = newArr;
+      renderOrdering(q, host);
+    });
+  });
+}
+     
     function paintOrdering(q){
       const correct = (q.correctOrder || []).join(",");
       const chosen = (userAnswers[q.id] || []).join(",");
