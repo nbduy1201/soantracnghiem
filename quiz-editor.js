@@ -2067,12 +2067,13 @@ function collectMC() {
 
   rows.forEach((row, i) => {
     const text = row.querySelector(".mc_text")?.value.trim() || "";
-    if (!text) return;
-
     const isCorrect = !!row.querySelector(".mc_correct")?.checked;
     const key = `mc_opt_${i}`;
+    const image = draftMedia[key] || null;
 
-    options.push({ text, image: draftMedia[key] || null, isCorrect });
+// ✅ Chỉ bỏ qua nếu cả text và image đều rỗng
+    if (!text && !image) return;
+    options.push({ text, image, isCorrect }); 
     if (isCorrect) correctAnswers.push(options.length - 1);
   });
 
@@ -2109,11 +2110,13 @@ function collectTF() {
 
   rows.forEach((row, i) => {
     const text = row.querySelector(".tf_text")?.value.trim() || "";
-    if (!text) return;
+const correct = (row.querySelector(".tf_correct")?.value || "true") === "true";
+const key = `tf_stmt_${i}`;
+const image = draftMedia[key] || null;
 
-    const correct = (row.querySelector(".tf_correct")?.value || "true") === "true";
-    const key = `tf_stmt_${i}`;
-    statements.push({ text, correct, image: draftMedia[key] || null });
+if (!text && !image) return;
+
+statements.push({ text, correct, image });
   });
 
   if (statements.length < 2) throw new Error("Cần ít nhất 2 mệnh đề.");
@@ -2126,14 +2129,15 @@ function collectMT() {
 
   rows.forEach((row, i) => {
     const left = row.querySelector(".mt_left")?.value.trim() || "";
-    const right = row.querySelector(".mt_right")?.value.trim() || "";
-    if (!left || !right) return;
+const right = row.querySelector(".mt_right")?.value.trim() || "";
 
-    pairs.push({
-      left, right,
-      leftImage: draftMedia[`mt_l_${i}`] || null,
-      rightImage: draftMedia[`mt_r_${i}`] || null
-    });
+const leftImage = draftMedia[`mt_l_${i}`] || null;
+const rightImage = draftMedia[`mt_r_${i}`] || null;
+
+// ✅ Mỗi vế hợp lệ nếu có text hoặc ảnh
+if ((!left && !leftImage) || (!right && !rightImage)) return;
+
+pairs.push({ left, right, leftImage, rightImage });
   });
 
   if (pairs.length < 2) throw new Error("Cần ít nhất 2 cặp ghép nối.");
@@ -2145,9 +2149,12 @@ function collectOR() {
   const items = [];
 
   rows.forEach((row, i) => {
-    const text = row.querySelector(".or_text")?.value.trim() || "";
-    if (!text) return;
-    items.push({ text, image: draftMedia[`or_${i}`] || null });
+const text = row.querySelector(".or_text")?.value.trim() || "";
+const image = draftMedia[`or_${i}`] || null;
+
+if (!text && !image) return;
+
+items.push({ text, image });
   });
 
   if (items.length < 2) throw new Error("Cần ít nhất 2 mục để sắp xếp.");

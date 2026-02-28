@@ -247,7 +247,40 @@
       border: 2px dashed rgba(253,200,48,.55);
       background: rgba(253,200,48,.08);
     }
+    /* Matching: equal height + image fit */
+.m-item{ min-height: 84px; }   /* giúp bên trái/bên phải đều chiều cao */
 
+.m-media{
+  width: 110px;
+  height: 72px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.12);
+  overflow: hidden;
+  background: rgba(255,255,255,.05);
+  flex: 0 0 110px;
+}
+.m-media img{
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* scale phù hợp, không bị méo/cắt */
+  display: block;
+}
+/* ===== MATCHING: force equal row height (left = right) ===== */
+.match-grid .m-item{
+  height: 104px;         /* chỉnh số này nếu muốn cao/thấp hơn */
+  min-height: 104px;     /* đảm bảo không bị co */
+  align-items: center;   /* canh giữa theo chiều dọc */
+}
+
+/* nếu có ảnh trong matching */
+.match-grid .m-media{
+  height: 72px;          /* ảnh nằm trong khung cố định */
+}
+.match-grid .m-media img{
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
     /* =========================
        FILL BLANKS (drag chips)
     ==========================*/
@@ -564,6 +597,45 @@
 }
 
 .tf-table tbody tr:last-child td{ border-bottom:none; }
+  /* =========================
+   HOVER ZOOM POPUP (preview lớn)
+========================= */
+.imgZoomPopup{
+  position: fixed;
+  z-index: 99999;
+  pointer-events: none;         /* popup không cản hover */
+  display: none;
+  padding: 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(10,10,20,.82);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 18px 50px rgba(0,0,0,.45);
+}
+
+.imgZoomPopup.show{ display: block; }
+
+.imgZoomPopup img{
+  display: block;
+  max-width: min(520px, 70vw);
+  max-height: min(520px, 70vh);
+  width: auto;
+  height: auto;
+  border-radius: 12px;
+  object-fit: contain;
+  background: rgba(255,255,255,.04);
+}
+
+.imgZoomPopup .cap{
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: .85;
+  color: rgba(255,255,255,.85);
+  max-width: min(520px, 70vw);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
   </style>
 </head>
 
@@ -1510,20 +1582,33 @@
       // left fixed
       const leftBox = $("matchLeft");
       leftBox.innerHTML = pairs.map(p => `
-        <div class="m-item" style="background:rgba(6,214,160,.10); border-color:rgba(6,214,160,.25)">
-          <span class="m-pin">📌</span>
-          <span>${escapeHtml(p.left || "")}</span>
-        </div>
-      `).join("");
+  <div class="m-item" style="background:rgba(6,214,160,.10); border-color:rgba(6,214,160,.25)">
+    <span class="m-pin">📌</span>
+
+    ${p.leftImage ? `<div class="m-media"><img src="${p.leftImage}" alt=""></div>` : ""}
+
+    <div style="flex:1;min-width:0">
+      <div>${escapeHtml(p.left || "")}</div>
+    </div>
+  </div>
+`).join("");
 
       // right reorder list
       const rightBox = $("matchRight");
-      rightBox.innerHTML = ans.map((rightIdx, pos) => `
-        <div class="m-item" draggable="true" data-pos="${pos}">
-          <span class="m-drag">↕</span>
-          <span>${escapeHtml(pairs[rightIdx]?.right || "")}</span>
-        </div>
-      `).join("");
+      rightBox.innerHTML = ans.map((rightIdx, pos) => {
+  const r = pairs[rightIdx] || {};
+  return `
+    <div class="m-item" draggable="true" data-pos="${pos}">
+      <span class="m-drag">↕</span>
+
+      ${r.rightImage ? `<div class="m-media"><img src="${r.rightImage}" alt=""></div>` : ""}
+
+      <div style="flex:1;min-width:0">
+        <div>${escapeHtml(r.right || "")}</div>
+      </div>
+    </div>
+  `;
+}).join("");
 
       // DnD reorder (HTML5)
       let dragPos = null;
@@ -2187,6 +2272,98 @@ setInterval(function(){
     document.body.innerHTML = "<h1 style='color:white;text-align:center;margin-top:20%'>⚠️ Không được mở DevTools</h1>";
   }
 }, 1000);
+  /*********************
+ * Hover Zoom Popup (preview lớn)
+ * - áp dụng cho mọi ảnh trong câu hỏi / option / matching / hotspot
+ *********************/
+(function(){
+  // tạo 1 popup dùng chung
+  const popup = document.createElement("div");
+  popup.className = "imgZoomPopup";
+  popup.innerHTML = `<img alt=""><div class="cap"></div>`;
+  document.body.appendChild(popup);
+
+  const pImg = popup.querySelector("img");
+  const pCap = popup.querySelector(".cap");
+
+  // selector các ảnh cần zoom (không cần sửa HTML render)
+  const ZOOM_SELECTOR = [
+    "#qImage img",
+    ".opt .thumb img",
+    ".m-media img",
+    ".hs-stage img"
+  ].join(",");
+
+  let activeImg = null;
+
+  function positionPopup(e){
+    if (!popup.classList.contains("show")) return;
+
+    const pad = 16;
+    const rect = popup.getBoundingClientRect();
+
+    let x = e.clientX + pad;
+    let y = e.clientY + pad;
+
+    // né tràn phải/dưới
+    if (x + rect.width + 8 > window.innerWidth) x = e.clientX - rect.width - pad;
+    if (y + rect.height + 8 > window.innerHeight) y = e.clientY - rect.height - pad;
+
+    // clamp
+    x = Math.max(8, Math.min(x, window.innerWidth - rect.width - 8));
+    y = Math.max(8, Math.min(y, window.innerHeight - rect.height - 8));
+
+    popup.style.left = x + "px";
+    popup.style.top  = y + "px";
+  }
+
+  function show(imgEl, e){
+    if (!imgEl || !imgEl.src) return;
+    activeImg = imgEl;
+
+    // nếu ảnh data: hoặc url đều ok
+    pImg.src = imgEl.src;
+
+    // caption lấy từ alt/title nếu có
+    const cap = imgEl.getAttribute("alt") || imgEl.getAttribute("title") || "";
+    pCap.textContent = cap ? cap : "🔍 Phóng to";
+    popup.classList.add("show");
+
+    // set vị trí sau khi show để có rect đúng
+    positionPopup(e);
+  }
+
+  function hide(){
+    popup.classList.remove("show");
+    activeImg = null;
+    // không cần clear src
+  }
+
+  // Event delegation: ảnh render động vẫn tự ăn
+  document.addEventListener("mouseover", (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLImageElement)) return;
+    if (!t.matches(ZOOM_SELECTOR)) return;
+    show(t, e);
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (!activeImg) return;
+    positionPopup(e);
+  });
+
+  document.addEventListener("mouseout", (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLImageElement)) return;
+    if (!t.matches(ZOOM_SELECTOR)) return;
+    hide();
+  });
+
+  // Esc để tắt nhanh (tuỳ chọn)
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hide();
+  });
+})();
   </script>
 </body>
 </html>
