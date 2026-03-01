@@ -145,12 +145,12 @@
     }
     /* Fix answer area position: keep question box height stable (long text scrolls) */
     .q-text{
-      font-size:1.06rem;
+      font-size:1.12rem;
       line-height:1.55;
       white-space:pre-wrap;
       margin-top:.35rem;
-      min-height:120px;
-      max-height:170px;
+      /* min-height:120px;
+      max-height:170px; */
       overflow:auto;
       padding-right:6px;
     }
@@ -636,6 +636,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+  
+
+    /* ===== NO ROUNDED CORNERS (square UI) ===== */
+    *{ border-radius: 0 !important; }
+    ::-webkit-scrollbar-thumb{ border-radius: 0 !important; }
+    ::-webkit-scrollbar-track{ border-radius: 0 !important; }
+
   </style>
 </head>
 
@@ -1015,7 +1022,14 @@
         }
         if (k === "Enter") {
           e.preventDefault();
-          submitCurrent(false);
+          // Thi: Enter = sang câu tiếp theo (không nộp từng câu)
+          if (mode === "thi") {
+            if (idx < questions.length - 1) go(1);
+            else showToast("Hết câu", "Đây là câu cuối. Bấm <b>Nộp bài</b> để kết thúc.");
+          } else {
+            // Luyện tập: Enter = nộp câu
+            submitCurrent(false);
+          }
           return;
         }
       }, { passive: false });
@@ -1501,7 +1515,6 @@
       const chosen = userAnswers[q.id] || [];
 
       host.innerHTML = `
-        <div class="hint">${multi ? "Chọn nhiều đáp án" : "Chọn 1 đáp án"}</div>
         <div class="options" id="mc_opts"></div>
       `;
 
@@ -1564,8 +1577,6 @@
       }
 
       host.innerHTML = `
-        <div class="hint">💡 Kéo thả các mục bên phải để sắp xếp đúng thứ tự tương ứng với bên trái.</div>
-
         <div class="match-wrap">
           <div class="match-head">
             <div style="flex:1;text-align:center">Bên trái</div>
@@ -1713,8 +1724,6 @@
             <div class="bank-title">Ngân hàng từ:</div>
             <div class="chips" id="chipBank"></div>
           </div>
-
-          <div class="hint">Kéo thả từ vào ô trống. Kéo từ trong ô trống ra ngoài để trả về ngân hàng.</div>
         </div>
       `;
 
@@ -1841,7 +1850,6 @@
               }).join("")}
             </tbody>
           </table>
-          <div class="hint">Chọn 1 đáp án cho mỗi dòng.</div>
         </div>
       `;
 
@@ -1885,10 +1893,10 @@
 
   host.innerHTML = `
     <div class="tf-wrap">
-      <table class="tf-table">
+      <table class="tf-table" id="tfTable">
         <thead>
           <tr>
-            <th>Mệnh đề</th>
+            <th style="text-align:left">Mệnh đề</th>
             <th>Đúng</th>
             <th>Sai</th>
           </tr>
@@ -1896,14 +1904,20 @@
         <tbody>
           ${st.map((s, i) => {
             const name = `tf_${q.id}_${i}`; // unique từng dòng
+            const img = s.image || s.media || null;
             return `
               <tr data-i="${i}">
-                <td>${escapeHtml(s.text || "")}</td>
-                <td style="text-align: center;">
-                  <input type="radio" name="${name}" value="true" ${ans[i]===true ? "checked":""} style="transform: scale(2); cursor: pointer;">
+                <td class="tf-stmt">
+                  <div>${mdToHtml(s.text || "")}</div>
+                  ${img ? `<div class="q-image" style="margin-top:.6rem;max-width:520px"><img src="${img}" alt=""></div>` : ""}
                 </td>
-                <td style="text-align: center;">
-                  <input type="radio" name="${name}" value="false" ${ans[i]===false ? "checked":""} style="transform: scale(2); cursor: pointer;">
+
+                <td class="tf-radio">
+                  <input type="radio" name="${name}" value="true" ${ans[i]===true ? "checked":""}>
+                </td>
+
+                <td class="tf-radio">
+                  <input type="radio" name="${name}" value="false" ${ans[i]===false ? "checked":""}>
                 </td>
               </tr>
             `;
@@ -1913,10 +1927,10 @@
     </div>
   `;
 
-  host.querySelectorAll('input[type="radio"]').forEach(inp => {
+  host.querySelectorAll('#tfTable input[type="radio"]').forEach(inp => {
     inp.addEventListener("change", () => {
       if (locked) return;
-      const i = Number(inp.closest("tr").getAttribute("data-i"));
+      const i = Number(inp.closest("tr")?.getAttribute("data-i"));
       const v = inp.value === "true";
       const copy = [...userAnswers[q.id]];
       copy[i] = v;
@@ -1929,20 +1943,23 @@
     function paintTF(q){
   const st = q.statements || [];
   const ans = userAnswers[q.id] || [];
-  const body = document.querySelector(".tf-table tbody");
+  const body = document.querySelector("#tfTable tbody");
   if (!body) return;
 
-  body.querySelectorAll("tr").forEach((row, i) => {
+  body.querySelectorAll("tr[data-i]").forEach((row) => {
+    const i = Number(row.getAttribute("data-i"));
     row.classList.remove("tf-row-ok","tf-row-bad");
-    const correct = !!st[i].correct;
+    const correct = !!st[i]?.correct;
     const chosen = ans[i];
-    const ok = (chosen === correct);
+    const ok = (chosen === true || chosen === false) ? (chosen === correct) : false;
     row.classList.add(ok ? "tf-row-ok" : "tf-row-bad");
   });
 }
 
 
-    /*********************
+
+
+    /**********************
      * 5) ORDERING (stable)
      *********************/
     function renderOrdering(q, host){
@@ -1959,7 +1976,6 @@
   }
 
   host.innerHTML = `
-    <div class="hint">💡 Kéo thả các dòng để sắp xếp thứ tự (không cần bấm mũi tên).</div>
     <div class="col" id="orBox" style="padding:12px"></div>
   `;
 

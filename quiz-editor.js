@@ -8,9 +8,7 @@ const LS_META_KEY = "quizMeta_v1";
 
 const typeLabels = {
   "multiple-choice": "Trắc nghiệm",
-  "multiple-choice-grid": "Lưới trắc nghiệm",
-  "true-false-grid": "Lưới đúng/sai",
-  "matching": "Ghép nối",
+  "multiple-choice-grid": "Lưới trắc nghiệm",  "matching": "Ghép nối",
   "ordering": "Sắp xếp",
   "fill-blanks": "Điền khuyết",
   "hotspot": "Hotspot",
@@ -136,6 +134,41 @@ function escapeHtml(s) {
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 function round2(n) { return Math.round(n * 100) / 100; }
 
+/* =======================
+   Migration: True/False Grid -> Multiple Choice Grid
+   - Vì đã có "Lưới trắc nghiệm", loại bỏ "Lưới đúng/sai".
+   - Dữ liệu cũ (type="true-false-grid") sẽ tự chuyển sang:
+     type="multiple-choice-grid", gridColumns=["Đúng","Sai"], gridRows từ statements.
+   - Lưu ý: ảnh theo từng mệnh đề (nếu có) sẽ KHÔNG được mang sang lưới mới.
+======================= */
+function migrateTFGridToMCG(q){
+  if (!q || q.type !== "true-false-grid") return q;
+
+  const statements = Array.isArray(q.statements) ? q.statements : [];
+  const gridRows = statements
+    .map(st => ({
+      text: (st?.text || "").toString(),
+      correct: st?.correct ? 0 : 1
+    }))
+    .filter(r => (r.text || "").trim().length);
+
+  return {
+    ...q,
+    type: "multiple-choice-grid",
+    gridColumns: ["Đúng", "Sai"],
+    gridRows,
+    updatedAt: q.updatedAt || new Date().toISOString()
+  };
+}
+
+function migrateQuestionsInPlace(){
+  const before = JSON.stringify(questions);
+  questions = (questions || []).map(migrateTFGridToMCG);
+  const after = JSON.stringify(questions);
+  if (before !== after) saveToLocalStorage(false);
+}
+
+
 
 function activateTab(tabId){
   // dùng cơ chế tab sẵn có (click button) để giữ nguyên logic
@@ -250,6 +283,9 @@ window.addEventListener("load", () => {
   questions = safeJsonParse(saved, []);
   if (!Array.isArray(questions)) questions = [];
   questions.forEach(q => { if (typeof q.exportFlag !== "boolean") q.exportFlag = true; });
+
+  // migrate legacy types
+  migrateQuestionsInPlace();
 
   // bind top buttons
   bindTopActions();
@@ -808,7 +844,6 @@ function handleTypeChange() {
   host.innerHTML = "";
   if (type === "multiple-choice") host.innerHTML = renderMultipleChoiceEditor();
   if (type === "multiple-choice-grid") host.innerHTML = renderMultipleChoiceGridEditor();
-  if (type === "true-false-grid") host.innerHTML = renderTrueFalseGridEditor();
   if (type === "matching") host.innerHTML = renderMatchingEditor();
   if (type === "ordering") host.innerHTML = renderOrderingEditor();
   if (type === "fill-blanks") host.innerHTML = renderFillBlanksEditor();
@@ -817,7 +852,6 @@ function handleTypeChange() {
   // init defaults + bind events theo type
   if (type === "multiple-choice") mc_init(4);
   if (type === "multiple-choice-grid") mcg_init(4, 2);
-  if (type === "true-false-grid") tf_init(2);
   if (type === "matching") mt_init(2);
   if (type === "ordering") or_init(2);
   if (type === "fill-blanks") fb_init(4);
@@ -2038,7 +2072,6 @@ function saveQuestion() {
   try {
     if (type === "multiple-choice") payload = { ...base, ...collectMC() };
     if (type === "multiple-choice-grid") payload = { ...base, ...collectMCG() };
-    if (type === "true-false-grid") payload = { ...base, ...collectTF() };
     if (type === "matching") payload = { ...base, ...collectMT() };
     if (type === "ordering") payload = { ...base, ...collectOR() };
     if (type === "fill-blanks") payload = { ...base, ...collectFB() };
@@ -2242,6 +2275,9 @@ function loadJSONFile(ev) {
       id: q.id || uid()
     }));
 
+    // migrate legacy types
+    questions = (questions || []).map(migrateTFGridToMCG);
+
     saveToLocalStorage(true);
     renderList();
     createNewQuestion();
@@ -2275,13 +2311,14 @@ function loadSampleData() {
     },
     {
       id: uid(),
-      type: "true-false-grid",
-      question: "Đánh giá các mệnh đề sau đúng hay sai:",
+      type: "multiple-choice-grid",
+      question: "Đánh giá các mệnh đề sau (chọn Đúng/Sai):",
       exportFlag: true,
-      statements: [
-        { text: "HTML là ngôn ngữ đánh dấu", correct: true },
-        { text: "CSS dùng để tạo cơ sở dữ liệu", correct: false },
-        { text: "JavaScript chạy trên trình duyệt", correct: true },
+      gridColumns: ["Đúng", "Sai"],
+      gridRows: [
+        { text: "HTML là ngôn ngữ đánh dấu", correct: 0 },
+        { text: "CSS dùng để tạo cơ sở dữ liệu", correct: 1 },
+        { text: "JavaScript chạy trên trình duyệt", correct: 0 },
       ],
       media: {},
       updatedAt: new Date().toISOString()
@@ -2466,14 +2503,6 @@ function sanitizeForExport(q) {
     out.correctAnswers = out.options
       .map((o, i) => o.isCorrect ? i : -1)
       .filter(i => i >= 0);
-  }
-
-  if (q.type === "true-false-grid") {
-    out.statements = (q.statements || []).map(s => ({
-      text: s.text,
-      correct: !!s.correct,
-      image: s.image || null
-    }));
   }
 
   if (q.type === "matching") {

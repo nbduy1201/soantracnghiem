@@ -472,3 +472,9 @@ select option{background: var(--dark)}
 
 /* Selected count */
 .q-selected-count{margin-top:.2rem;opacity:.85;font-weight:700}
+
+/* ===== NO ROUNDED CORNERS (square UI) ===== */
+*{ border-radius: 0 !important; }
+::-webkit-scrollbar-thumb{ border-radius: 0 !important; }
+::-webkit-scrollbar-track{ border-radius: 0 !important; }
+
